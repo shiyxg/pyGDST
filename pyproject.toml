@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pygdst"
+version = "0.0.1"
+authors = [
+  { name="Shi Yongxiang", email="shi@mail.iggcas.ac.cn" },
+]
+description = "A toolkit to read and convert seismic data of GDST (https://www.geodeepsensing.com/) sensors to H5 and SAC file format "
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/pypa/sampleproject"
+Issues = "https://github.com/pypa/sampleproject/issues"
