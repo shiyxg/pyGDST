@@ -24,6 +24,22 @@ B_KEYS=BHEADER_DEF.keys()
 # count 2 电压
 COUNT2V = 2.5* 1000/2**31 
 
+# DB定义
+DB_FACTOR = {
+    0:1,
+    6:2,
+    12:4,
+    24:8,
+}
+
+# 通道定义
+CHN_DEF={
+    1:'Z',
+    3:'ENZ',
+    4:'ENZH',
+}
+
 # 数据块大小
 BLOCK_SIZE = 512 # int32
 DATA_SIZE = 500 # int32
+

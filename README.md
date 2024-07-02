@@ -39,12 +39,12 @@ new_file = './test.h5'
 bins2h5(bin_files, new_file, dt=dt)
 
 '''
-H5 文件内部定义
 f.create_dataset('data', data=data)
 f.create_dataset('headers', data=headers)
 f.create_dataset('Times',data=t_all)
 f.create_dataset('dt',data=dt)
-f.create_dataset('NF',data=len(data))
+f.create_dataset('N_hours',data=nh)
+f.create_dataset('chns',data=CHN_DEF[nc])
 f.create_dataset('raw_files',data=np.array(bins_file, dtype='S'))
 '''
 

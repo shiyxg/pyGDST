@@ -8,6 +8,7 @@ import h5py
 from glob import glob
 import tqdm
 from .gdst import read_bin, read_header
+from .paras import CHN_DEF
 
 NETWORK = 'GDST'
 
@@ -20,12 +21,12 @@ def write_sac(file_names:str) -> any:
 def merge_sac(file_names:str) -> any:
     pass
 
-def create_sac_1h_CZ(data:np.array, name:str,dt:float, time_s:str,  NET=NETWORK)->ob.Trace:
+def create_sac_1h_1C(data:np.array, name:str,dt:float, time_s:str,  NET=NETWORK, CHN='Z')->ob.Trace:
     
     stats = Stats()
     stats.network = NET
     stats.station = name
-    stats.station = 'Z'
+    stats.channel = CHN
 
     y = int(time_s[0:2])+2000
     m = int(time_s[2:4])
@@ -36,10 +37,10 @@ def create_sac_1h_CZ(data:np.array, name:str,dt:float, time_s:str,  NET=NETWORK)
     stats.starttime = UTCDateTime(year=y,month=m,day=d,hour=h)
     # print(stats.starttime)
 
-    stats.sampling_rate = 1/dt
+    stats.delta = dt
     stats.npts = int(3600/dt)
 
-    assert stats.npts/stats.sampling_rate==3600
+    assert stats.npts*stats.delta==3600
 
     trace = ob.Trace(data, header=stats)
 
@@ -50,7 +51,7 @@ def bin2sac(bin_file:str,sac_file:str, time_s:str, dt:float,name:str, NET=NETWOR
     binary file to sac (1h)
 
     bin_file: file name of binary
-    sac_file: file name of sac file
+    sac_file: file name of sac file[s], use '{CHN}' as placeholder for 3C/4C sensor
     time_s  : start time of the bin_file
     dt      : sampling rate (s)
     
@@ -60,20 +61,31 @@ def bin2sac(bin_file:str,sac_file:str, time_s:str, dt:float,name:str, NET=NETWOR
 
     H, data, hs = read_bin(bin_file, dt=dt/1000)
 
-    trace = create_sac_1h_CZ(data, name,dt, time_s,  NET=NETWORK)
+    if data.shape[0]==1 and '{CHN}' not in sac_file:
+        trace = create_sac_1h_1C(data, name,dt, time_s,  NET=NETWORK,CHN='Z')
+        trace.write(sac_file)
 
-    trace.write(sac_file)
+    else:
 
-def bins2sac(bins_file:list,sac_file:str, dt:float,name:str, DOWNSAMPLE_RATE=1, NET=NETWORK,PATH_MARKER='/') -> any:
+        nc = data.shape[0]
+        chn_names = CHN_DEF[nc]
+        for i, chn_i in enumerate(chn_names):
+            trace = create_sac_1h_1C(data[i,:], name,dt, time_s,  NET=NETWORK,CHN=chn_i)
+            sac_file_i = sac_file.format(CHN=chn_i)
+            trace.write(sac_file_i)
+        
+
+def bins2sac_Z(bins_file:list,sac_file:str, dt:float,name:str, DOWNSAMPLE_RATE=1, NET=NETWORK,PATH_MARKER='/') -> any:
     '''
-    merge binary files to a sac
+    merge binary files to a sac, 单通道 Z
 
     bin_file        : file names of binary, list[str], eg: [./P320LINE/A0000102/24052808.BIN]
     sac_file        : file name of sac file
     dt              : sampling rate (s)
+    name            : station name
+
     DOWNSAMPLE_RATE : 降采样比例
-    
-    name    : station name
+
     NET     : network name
     PATH_MARKER: 路径分割符号
     '''
@@ -85,9 +97,9 @@ def bins2sac(bins_file:list,sac_file:str, dt:float,name:str, DOWNSAMPLE_RATE=1, 
         t_string = file.split(PATH_MARKER)[-1]
         t_s =  t_string[0:8]
 
-        H, data, hs = read_bin(file, dt=dt*1000)
+        H, data, hs = read_bin(file, dt=dt*1000,IS_Z_CHN=True)
         # print(t_s,data.shape)
-        trace = create_sac_1h_CZ(data, name,dt, t_s,  NET=NETWORK)
+        trace = create_sac_1h_1C(data, name,dt, t_s,  NET=NETWORK, CHN='Z')
         traces.append(trace)
 
     stream = ob.Stream(traces)
@@ -100,6 +112,63 @@ def bins2sac(bins_file:list,sac_file:str, dt:float,name:str, DOWNSAMPLE_RATE=1, 
         stream = stream.decimate(factor=DOWNSAMPLE_RATE)
         # print('after DW',stream[0].data.shape)
     stream.write(sac_file)
+
+def bins2sac(bins_file:list,sac_file:str,dt:float,name:str, N_CHN=1, DOWNSAMPLE_RATE=1, NET=NETWORK,PATH_MARKER='/') -> any:
+    '''
+    merge binary files to a sac, 多通道
+
+    bin_file        : file names of binary, list[str], eg: [./P320LINE/A0000102/24052808.BIN]
+    sac_file        : sac文件名, use '{CHN}' as placeholder for 3C/4C sensor
+    dt              : sampling rate (s)
+    name            : station name
+
+    N_CHN           : 通道数, num of CHN
+    DOWNSAMPLE_RATE : 降采样比例
+    
+    NET     : network name
+    PATH_MARKER: 路径分割符号
+    '''
+    bins_file.sort()
+    
+    if N_CHN>1:
+        assert '{CHN}' in sac_file
+    if N_CHN==1 and '{CHN}' in sac_file:
+        sac_file = sac_file.format(CHN='Z')
+    
+    traces    = [[]]*N_CHN
+    chn_names = CHN_DEF[N_CHN]
+
+    for i, file in enumerate(bins_file):
+
+        t_string = file.split(PATH_MARKER)[-1]
+        t_s =  t_string[0:8]
+
+        H, data, hs = read_bin(file, dt=dt*1000,IS_Z_CHN=False)
+        # print(t_s,data.shape)
+        assert data.shape[0]==N_CHN
+
+        for j in range(N_CHN):
+            trace = create_sac_1h_1C(data[j,:], name,dt, t_s,  NET=NETWORK, CHN=chn_names[j])
+            traces[j].append(trace)
+
+    for i in range(N_CHN):
+        stream = ob.Stream(traces[i])
+        # print('1h',stream[0].data.shape)
+        stream = stream.merge(fill_value=0)
+        # print('after merge',stream[0].data.shape)
+
+        if DOWNSAMPLE_RATE>1:
+            
+            stream = stream.decimate(factor=DOWNSAMPLE_RATE)
+            # print('after DW',stream[0].data.shape)
+        
+        if N_CHN>1:
+            sac_file_i = sac_file.format(CHN=chn_names[i])
+        else:
+            sac_file_i = sac_file
+
+        stream.write(sac_file)
+
 
 def bins2h5(bins_file:list, h5_name, dt=0.002, PATH_MARKER='/') -> any:
     '''
@@ -130,16 +199,21 @@ def bins2h5(bins_file:list, h5_name, dt=0.002, PATH_MARKER='/') -> any:
         headers.append(f_header)
         data.append(data_i)
         t_all.append(t_s)
+
     headers = np.array(headers)
     data = np.array(data)
     t_all = np.array(t_all)
+
+    nh, nc, nt = data.shape
+    
     print(f'write {headers.shape[0]} files to {h5_name}')
     with h5py.File(h5_name,'w') as f:
         f.create_dataset('data', data=data)
         f.create_dataset('headers', data=headers)
         f.create_dataset('Times',data=t_all)
         f.create_dataset('dt',data=dt)
-        f.create_dataset('NF',data=len(data))
+        f.create_dataset('N_hours',data=nh)
+        f.create_dataset('chns',data=CHN_DEF[nc])
         f.create_dataset('raw_files',data=np.array(bins_file, dtype='S'))
 
         
