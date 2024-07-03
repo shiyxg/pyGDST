@@ -38,41 +38,38 @@ def fheader_bin2txt(data:np.array, M=',', wanted=[]):
         r += f'{data[i]}{M}'
     return r
 
-
-def bheader_get_def(M=',', wanted=[]):
+def bheader_decode(header) -> tuple:
     '''
-    把block_header头文件定义转换为CSV文件的头文件, eg:"lat,lon,..."
-    M: , for csv
-    wanted: 所需的参数名称, 不提供则使用全部定义
-    '''
+    把block_header 中有效信息解码出来,
 
-    r = ''
-
-    keys =  B_KEYS if len(wanted)==0 \
-            else wanted
-    for i, name in keys:
-        r += f'{name}{M}'
-    return r
-
-
-def bheader_bin2txt(data:np.array, M=',', wanted=[]):
-    '''
-    把block_header 中的data中的有效信息转换出来,默认输出CSV文件的一行 "par1,par2,..."
-
-    data: np.array(int32)
-    M: , for csv
-    wanted: 所需的参数名称
+    out: date_UTC,time_UTC, lat, lon, seq1, seq2
     '''
 
-    r = ''
-    keys =  B_KEYS if len(wanted)==0 \
-            else wanted
-    for i, name in keys:
-        i = BHEADER_DEF[name]
-        r += f'{data[i]}{M}'
-    return r
-
+    H = header.tobytes()
     
+    y =  int.from_bytes(H[18:19],'little')
+    m =  int.from_bytes(H[19:20],'little')
+    d =  int.from_bytes(H[20:21],'little')
+    h =  int.from_bytes(H[21:22],'little')
+    s1 = int.from_bytes(H[22:23],'little')
+    s2 = int.from_bytes(H[23:24],'little')
+    date_UTC = y*10000+m*100+d
+    time_UTC = h*10000+s1*100+s2
+
+    lat = int.from_bytes(H[24:28],'little')
+    lat = lat%2**28
+    lat = lat//1e6 + (lat%1e6)/1e4 / 60.0
+
+    lon = int.from_bytes(H[28:32],'little')
+    lon = lon%2**28
+    lon = lon//1e6 + (lon%1e6)/1e4 / 60.0
+
+    seq1 = int.from_bytes(H[32:36],'little')
+    seq2 = int.from_bytes(H[36:39],'little')
+    
+    return date_UTC,time_UTC, lat, lon, seq1, seq2
+
+ 
 def read_bin_multiple_chn(file_name, dt=1, DB=0,
              dtype=np.float32,FTYPE=np.int32,
              block_size = BLOCK_SIZE, data_size = DATA_SIZE, header_size=BLOCK_SIZE-DATA_SIZE)-> tuple:
@@ -180,7 +177,8 @@ def read_bin(file_name, dt=1, DB=0,
 
 def read_header(file_name, dt=1,
              dtype=np.float32,FTYPE=np.int32,
-             block_size = BLOCK_SIZE)-> np.array:
+             block_size = BLOCK_SIZE
+             )-> np.array:
     '''
     只读取GDST仪器二进制文件的头文件
 
