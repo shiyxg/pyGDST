@@ -176,7 +176,8 @@ def bins2sac_Z(bins_file:list,sac_file:str, dt:float,name:str, DOWNSAMPLE_RATE=1
         # print('after DW',stream[0].data.shape)
     stream.write(sac_file)
 
-def bins2sac(bins_file:list,sac_file:str,dt:float,name:str, N_CHN=1, DOWNSAMPLE_RATE=1, NET=NETWORK,PATH_MARKER='/',
+def bins2sac(bins_file:list,sac_file:str,dt:float,name:str,
+             DB=0,N_CHN=1, DOWNSAMPLE_RATE=1, NET=NETWORK,PATH_MARKER='/',
              header_file=None) -> any:
     '''
     merge binary files to a sac, 多通道
@@ -186,6 +187,7 @@ def bins2sac(bins_file:list,sac_file:str,dt:float,name:str, N_CHN=1, DOWNSAMPLE_
     dt              : sampling rate (s)
     name            : station name
 
+    DB              : 增益
     N_CHN           : 通道数, num of CHN
     DOWNSAMPLE_RATE : 降采样比例
     
@@ -211,20 +213,20 @@ def bins2sac(bins_file:list,sac_file:str,dt:float,name:str, N_CHN=1, DOWNSAMPLE_
         t_string = file.split(PATH_MARKER)[-1]
         t_s =  t_string[0:8]
 
-        H, data, hs = read_bin(file, dt=dt*1000,IS_Z_CHN=False)
+        H, data, hs = read_bin(file, dt=dt*1000,IS_Z_CHN=False, DB=DB)
         # print(t_s,data.shape)
         assert data.shape[0]==N_CHN
-
+        # print(data.max())
         #头文件
         inf_lines = bheader2list(hs[0,:,:], start=0, interval=int(60/dt/DATA_SIZE))
         header_list+=inf_lines
 
         #健康度
         health_i = np.ones([1,60,1])
-        health_i[0,:,0] = (np.array(inf_lines)[:,0]==int(t_s[:3]))
+        health_i[0,:,0] = (np.array(inf_lines)[:,0]==int(t_s[:6]))
         data = data.reshape([N_CHN, 60,NT_amin])*health_i
         data = data.reshape([N_CHN,-1])
-
+        # print(data.max())
         for j in range(N_CHN):
             data_ij = data[j,:]
             trace = create_sac_1h_1C(data_ij.flatten(), name,dt, t_s,  NET=NETWORK, CHN=chn_names[j])
@@ -250,7 +252,7 @@ def bins2sac(bins_file:list,sac_file:str,dt:float,name:str, N_CHN=1, DOWNSAMPLE_
         else:
             sac_file_i = sac_file
 
-        stream.write(sac_file)
+        stream.write(sac_file_i)
 
 
 def bins2h5(bins_file:list, h5_name, dt=0.002, PATH_MARKER='/') -> any:
